@@ -4,14 +4,14 @@ using System.Runtime.InteropServices;
 using MelonLoader;
 using EZDelivery; // The namespace of your mod class
 // ...
-[assembly: MelonInfo(typeof(EZDelivery.EZDelivery), "EZ Delivery", "1.0", "WaffDev")]
+[assembly: MelonInfo(typeof(EZDelivery.EZDelivery), "EZ Delivery", "1.5.2", "WaffDev")]
 [assembly: MelonGame("Nokta Games", "Supermarket Simulator")]
 
 // General Information about an assembly is controlled through the following
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
 [assembly: AssemblyTitle("EZDelivery")]
-[assembly: AssemblyDescription("")]
+[assembly: AssemblyDescription("An auto-racking and quick-racking tool for Supermarket Simulator")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
 [assembly: AssemblyProduct("EZDelivery")]
@@ -37,5 +37,5 @@ using EZDelivery; // The namespace of your mod class
 // You can specify all the values or you can default the Build and Revision Numbers
 // by using the '*' as shown below:
 // [assembly: AssemblyVersion("1.0.*")]
-[assembly: AssemblyVersion("1.0.0.0")]
-[assembly: AssemblyFileVersion("1.0.0.0")]
+[assembly: AssemblyVersion("1.5.2")]
+[assembly: AssemblyFileVersion("1.5.2")]

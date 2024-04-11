@@ -222,3 +222,6 @@ C:\Users\james\source\repos\EZDelivery\TestMod\obj\Debug\EZDelivery.csproj.CoreC
 C:\Users\james\source\repos\EZDelivery\TestMod\obj\Debug\EZDelivery.csproj.CopyComplete
 C:\Users\james\source\repos\EZDelivery\TestMod\obj\Debug\EZDelivery.dll
 C:\Users\james\source\repos\EZDelivery\TestMod\obj\Debug\EZDelivery.pdb
+C:\Users\james\source\repos\EZDelivery\TestMod\bin\Debug\AsmResolver.xml
+C:\Users\james\source\repos\EZDelivery\TestMod\bin\Debug\Cinemachine.dll
+C:\Users\james\source\repos\EZDelivery\TestMod\bin\Debug\Unity.Timeline.dll
