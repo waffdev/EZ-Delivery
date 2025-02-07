@@ -281,7 +281,7 @@ namespace EZDelivery
             {
                 Restocker restocker = new Restocker();
                 RestockerManagementData data = new RestockerManagementData();
-                data.UseUnlabeledRacks = true;
+                data.UseUnlabeledRacks = CrossoverClass.rackFreeSlots;
                 restocker.SetRestockerManagementData(data);
                 RackSlot slotThatHasSpaceFor = instance.GetRackSlotThatHasSpaceFor(product.ID, interactable.BoxID, restocker);
                 if ((UnityEngine.Object)slotThatHasSpaceFor == (UnityEngine.Object)null || !slotThatHasSpaceFor.HasProduct && !CrossoverClass.rackFreeSlots)
