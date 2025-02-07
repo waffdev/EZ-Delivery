@@ -1,4 +1,4 @@
-bin/
-.vs/
-obj/
 /EZDelivery.sln
+/bin
+/obj
+/.vs
