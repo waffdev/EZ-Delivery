@@ -270,7 +270,7 @@ namespace EZDelivery
         {
             Box interactable = (Box)boxInteraction.Interactable;
             RackManager instance = Singleton<RackManager>.Instance;
-            if ((UnityEngine.Object)instance == (UnityEngine.Object)null)
+            if (instance == null)
                 return;
             ProductSO product = interactable.Product;
             if (Singleton<EmployeeManager>.Instance.IsProductOccupied(product.ID))
@@ -284,7 +284,7 @@ namespace EZDelivery
                 data.UseUnlabeledRacks = CrossoverClass.rackFreeSlots;
                 restocker.SetRestockerManagementData(data);
                 RackSlot slotThatHasSpaceFor = instance.GetRackSlotThatHasSpaceFor(product.ID, interactable.BoxID, restocker);
-                if ((UnityEngine.Object)slotThatHasSpaceFor == (UnityEngine.Object)null || !slotThatHasSpaceFor.HasProduct && !CrossoverClass.rackFreeSlots)
+                if (slotThatHasSpaceFor == null || !slotThatHasSpaceFor.HasProduct && !CrossoverClass.rackFreeSlots)
                     CrossoverClass.CustomWarning("No rack space");
                 else if (slotThatHasSpaceFor.Data.ProductID == product.ID || CrossoverClass.rackFreeSlots)
                 {
@@ -341,13 +341,12 @@ namespace EZDelivery
             }
             boxList.ForEach((Action<Box>)(box =>
             {
-                RackSlot slotThatHasSpaceFor = Singleton<RackManager>.Instance.GetRackSlotThatHasSpaceFor(box.Product.ID, box.BoxID, new Restocker()
-                {
-                    ManagementData = {
-            UseUnlabeledRacks = CrossoverClass.rackFreeSlots
-          }
-                });
-                if (!((UnityEngine.Object)slotThatHasSpaceFor != (UnityEngine.Object)null))
+                Restocker restocker = new Restocker();
+                RestockerManagementData data = new RestockerManagementData();
+                data.UseUnlabeledRacks = CrossoverClass.rackFreeSlots;
+                restocker.SetRestockerManagementData(data);
+                RackSlot slotThatHasSpaceFor = Singleton<RackManager>.Instance.GetRackSlotThatHasSpaceFor(box.Product.ID, box.BoxID, restocker);
+                if (!(slotThatHasSpaceFor != null))
                     return;
                 if (box.Product.ID == slotThatHasSpaceFor.Data.ProductID || CrossoverClass.rackFreeSlots)
                 {
@@ -416,17 +415,18 @@ namespace EZDelivery
         private static void Postfix(BoxInteraction __instance) => CrossoverClass.shouldDisplay = false;
     }
 
-    //[HarmonyPatch(typeof(DeliveryManager), "Delivery", new Type[] { typeof(MarketShoppingCart.ShippingCost) })]
-    //public static class DeliveryManagerPatch
-    //{
-    //    private static void Postfix(DeliveryManager __instance)
-    //    {
-    //        if (!CrossoverClass.autoRack)
-    //            return;
-    //        GameObject gameObject = __instance.gameObject;
-    //        CrossoverClass.AutoRack(__instance);
-    //    }
-    //}
+    [HarmonyPatch(typeof(DeliveryManager), "Delivery")]
+    public static class DeliveryManagerPatch
+    {
+        private static void Postfix(DeliveryManager __instance)
+        {
+            if (!CrossoverClass.autoRack)
+                return;
+            GameObject gameObject = __instance.gameObject;
+            CrossoverClass.AutoRack(__instance);
+            //CrossoverClass.CustomWarning("Called Delivery hook!");
+        }
+    }
 }
 
 
