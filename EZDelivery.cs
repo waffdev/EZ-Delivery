@@ -268,216 +268,165 @@ namespace EZDelivery
 
         private void PlaceBoxInRack(GameObject player, BoxInteraction boxInteraction)
         {
-            Box box = (Box)boxInteraction.Interactable;
-            RackManager rackManager = Singleton<RackManager>.Instance;
-            if (rackManager == null)
+            Box interactable = (Box)boxInteraction.Interactable;
+            RackManager instance = Singleton<RackManager>.Instance;
+            if (instance == null)
                 return;
-
-            ProductSO product = box.Product;
-
-            EmployeeManager employeeManager = Singleton<EmployeeManager>.Instance;
-
-            if (employeeManager.IsProductOccupied(product.ID))
+            ProductSO product = interactable.Product;
+            if (Singleton<EmployeeManager>.Instance.IsProductOccupied(product.ID))
             {
                 CrossoverClass.CustomWarning("Occupied by Restocker");
-                return;
             }
-
-            RackSlot rackSlot = rackManager.GetRackSlotThatHasSpaceFor(product.ID, box.BoxID);
-
-            // shouldn't happen but if it does:
-            if (rackSlot == null)
+            else
             {
-                CrossoverClass.CustomWarning("No rack space");
-                return;
+                Restocker restocker = new Restocker();
+                RestockerManagementData data = new RestockerManagementData();
+                data.UseUnlabeledRacks = CrossoverClass.rackFreeSlots;
+                restocker.SetRestockerManagementData(data);
+                RackSlot slotThatHasSpaceFor = instance.GetRackSlotThatHasSpaceFor(product.ID, interactable.BoxID, restocker);
+                if (slotThatHasSpaceFor == null || !slotThatHasSpaceFor.HasProduct && !CrossoverClass.rackFreeSlots)
+                    CrossoverClass.CustomWarning("No rack space");
+                else if (slotThatHasSpaceFor.Data.ProductID == product.ID || CrossoverClass.rackFreeSlots)
+                {
+                    interactable.CloseBox();
+                    slotThatHasSpaceFor.AddBox(interactable.BoxID, interactable);
+                    interactable.Racked = true;
+                    Traverse.Create((object)boxInteraction).Field("m_Box").SetValue((object)null);
+                    Singleton<PlayerObjectHolder>.Instance.PlaceBoxToRack();
+                    Singleton<PlayerInteraction>.Instance.InteractionEnd((Interaction)boxInteraction);
+                }
+                else
+                    Singleton<WarningSystem>.Instance.RaiseInteractionWarning(InteractionWarningType.FULL_RACK, (string[])null);
             }
-
-            // if there is a matching label OR if items can be racked on free space
-            if (rackSlot.Data.ProductID == product.ID || CrossoverClass.rackFreeSlots)
-            {
-                box.CloseBox();
-                rackSlot.AddBox(box.BoxID, box);
-                box.Racked = true;
-
-                HarmonyLib.Traverse.Create(boxInteraction).Field("m_Box").SetValue(null);
-
-                Singleton<PlayerObjectHolder>.Instance.PlaceBoxToRack();
-                Singleton<PlayerInteraction>.Instance.InteractionEnd(boxInteraction);
-            } else
-            {
-                Singleton<WarningSystem>.Instance.RaiseInteractionWarning(InteractionWarningType.FULL_RACK, null);
-            }
-
-
         }
 
-      
+
     }
 
     public static class CrossoverClass
     {
-        public static int count = 0;
-        public static bool shouldDisplay = false;
-        public static Sprite productIcon = null;
-        public static bool restocking = false;
-        public static bool autoRack = false;
-        public static bool rackFreeSlots = false;
-        public static bool uiEnabled = false;
+        public static int count;
+        public static bool shouldDisplay;
+        public static Sprite productIcon;
+        public static bool restocking;
+        public static bool autoRack;
+        public static bool rackFreeSlots;
+        public static bool uiEnabled;
 
         public static void CustomWarning(string text)
         {
-            Singleton<WarningSystem>.Instance.RaiseInteractionWarning(InteractionWarningType.FULL_RACK, null);
-            GameObject warningCanvas = GameObject.Find("Warning Canvas");
-            GameObject title = warningCanvas.transform.Find("Interaction Warning").transform.Find("BG").transform.Find("Title").gameObject;
-            TextMeshProUGUI tmProUGUI = title.GetComponent<TextMeshProUGUI>();
-            tmProUGUI.text = "<sprite=0> " + text;
-
+            Singleton<WarningSystem>.Instance.RaiseInteractionWarning(InteractionWarningType.FULL_RACK, (string[])null);
+            GameObject.Find("Warning Canvas").transform.Find("Interaction Warning").transform.Find("BG").transform.Find("Title").gameObject.GetComponent<TextMeshProUGUI>().text = "<sprite=0> " + text;
         }
 
         public static void AutoRack(DeliveryManager deliveryManager)
         {
-            int count = 0;
-            List<Box> boxesToRack = new List<Box>();
-            for (int i = 0; i < deliveryManager.transform.childCount; i++)
+            int num = 0;
+            List<Box> boxList = new List<Box>();
+            for (int index = 0; index < deliveryManager.transform.childCount; ++index)
             {
-                count++;
-                Transform child = deliveryManager.transform.GetChild(i);
-                GameObject boxObject = child.gameObject;
-                Box box = null;
-                bool isBox = boxObject.TryGetComponent<Box>(out box);
-
-                if (isBox)
+                ++num;
+                GameObject gameObject = deliveryManager.transform.GetChild(index).gameObject;
+                Box component1 = (Box)null;
+                if (gameObject.TryGetComponent<Box>(out component1))
                 {
-                    boxesToRack.Add(box);
-                } else
-                {
-                    FurnitureBox furnitureBox = null;
-                    bool isFurniture = boxObject.TryGetComponent<FurnitureBox>(out furnitureBox);
-                    if (isFurniture)
-                        Debug.Log("Skipped auto-racking a box, the box is furniture");
+                    boxList.Add(component1);
                 }
-                
+                else
+                {
+                    FurnitureBox component2 = (FurnitureBox)null;
+                    if (gameObject.TryGetComponent<FurnitureBox>(out component2))
+                        Debug.Log((object)"Skipped auto-racking a box, the box is furniture");
+                }
             }
-
-            boxesToRack.ForEach(box =>
+            boxList.ForEach((Action<Box>)(box =>
             {
-                RackManager rackManager = Singleton<RackManager>.Instance;
-                RackSlot rackSlot = rackManager.GetRackSlotThatHasSpaceFor(box.Product.ID, box.BoxID);
-                if (rackSlot != null)
+                Restocker restocker = new Restocker();
+                RestockerManagementData data = new RestockerManagementData();
+                data.UseUnlabeledRacks = CrossoverClass.rackFreeSlots;
+                restocker.SetRestockerManagementData(data);
+                RackSlot slotThatHasSpaceFor = Singleton<RackManager>.Instance.GetRackSlotThatHasSpaceFor(box.Product.ID, box.BoxID, restocker);
+                if (!(slotThatHasSpaceFor != null))
+                    return;
+                if (box.Product.ID == slotThatHasSpaceFor.Data.ProductID || CrossoverClass.rackFreeSlots)
                 {
-                    if (box.Product.ID == rackSlot.Data.ProductID || CrossoverClass.rackFreeSlots)
+                    foreach (Collider componentsInChild in box.gameObject.GetComponentsInChildren<Collider>())
+                        componentsInChild.isTrigger = false;
+                    Rigidbody component;
+                    if (box.TryGetComponent<Rigidbody>(out component))
                     {
-                        
-                        // Fix bug of weird placement, falling through floor etc
-
-                        
-
-                        Collider[] componentsInChildren = box.gameObject.GetComponentsInChildren<Collider>();
-                        for (int i = 0; i < componentsInChildren.Length; i++)
-                        {
-                            componentsInChildren[i].isTrigger = false;
-                        }
-
-                        Rigidbody boxPhysics;
-                        if (box.TryGetComponent<Rigidbody>(out boxPhysics))
-                        {
-                            boxPhysics.isKinematic = true;
-                            boxPhysics.velocity = Vector3.zero;
-                            boxPhysics.interpolation = RigidbodyInterpolation.None;
-                        }
-
-                        rackSlot.AddBox(box.BoxID, box);
-                        rackSlot.EnableBoxColliders = true;
-                        
-                        int interactableLayer = LayerMask.NameToLayer("Interactable");
-                        box.gameObject.layer = interactableLayer;
-
-                        box.Racked = true;
-                        //Singleton<PlayerObjectHolder>.Instance.PlaceBoxToRack();
-                        //Singleton<PlayerInteraction>.Instance.InteractionEnd(Singleton<BoxInteraction>.Instance);
+                        component.isKinematic = true;
+                        component.velocity = Vector3.zero;
+                        component.interpolation = RigidbodyInterpolation.None;
                     }
-                    else if (!CrossoverClass.rackFreeSlots)
-                    {
-                        CrossoverClass.CustomWarning("Some products had no space");
-                    }
+                    slotThatHasSpaceFor.AddBox(box.BoxID, box);
+                    slotThatHasSpaceFor.EnableBoxColliders = true;
+                    int layer = LayerMask.NameToLayer("Interactable");
+                    box.gameObject.layer = layer;
+                    box.Racked = true;
                 }
-            });
-
+                else if (!CrossoverClass.rackFreeSlots)
+                    CrossoverClass.CustomWarning("Some products had no space");
+            }));
         }
-        
     }
 
-    
+
     [HarmonyPatch(typeof(BoxInteraction), "OnEnable")]
     public static class BIOnEnablePatch
     {
-
-        static void Postfix(BoxInteraction __instance)
+        private static void Postfix(BoxInteraction __instance)
         {
-
             BoxInteraction boxInteraction = __instance;
-            if (boxInteraction.Interactable is Box && __instance.enabled)
+            if (!(boxInteraction.Interactable is Box) || !__instance.enabled)
+                return;
+            Box interactable = (Box)boxInteraction.Interactable;
+            if (interactable.gameObject.name != "SpecialEMarketBox")
             {
-                RackManager rackManager = Singleton<RackManager>.Instance;
-                Box box = (Box)boxInteraction.Interactable;
+                RackManager instance = Singleton<RackManager>.Instance;
                 int finalCount = 0;
-
-                
-                Dictionary<int, List<RackSlot>> m_RackSlots = (Dictionary<int, List<RackSlot>>)Traverse.Create(rackManager).Field("m_RackSlots").GetValue();
-                if (m_RackSlots != null)
+                Dictionary<int, List<RackSlot>> dictionary = (Dictionary<int, List<RackSlot>>)Traverse.Create((object)instance).Field("m_RackSlots").GetValue();
+                if (dictionary != null)
                 {
-                    List<RackSlot> rackSlots;
-                    if (m_RackSlots.TryGetValue(box.Product.ID, out rackSlots))
-                    {
-                        rackSlots.ForEach(rackSlot =>
+                    List<RackSlot> rackSlotList;
+                    if (dictionary.TryGetValue(interactable.Product.ID, out rackSlotList))
+                        rackSlotList.ForEach((Action<RackSlot>)(rackSlot =>
                         {
-                            if (rackSlot.HasProduct)
-                            {
-                                finalCount += rackSlot.Data.TotalProductCount;
-                            }
-                        });
-                    }
-                } else
-                {
-                    MelonLogger.Error("There was an issue attempting to get all rack slots");
+                            if (!rackSlot.HasProduct)
+                                return;
+                            finalCount += rackSlot.Data.TotalProductCount;
+                        }));
                 }
-
+                else
+                    MelonLogger.Error("There was an issue attempting to get all rack slots");
                 CrossoverClass.count = finalCount;
                 CrossoverClass.shouldDisplay = true;
-                CrossoverClass.productIcon = box.Product.ProductIcon;
-                CrossoverClass.restocking = Singleton<EmployeeManager>.Instance.IsProductOccupied(box.Product.ID);
+                CrossoverClass.productIcon = interactable.Product.ProductIcon;
+                CrossoverClass.restocking = Singleton<EmployeeManager>.Instance.IsProductOccupied(interactable.Product.ID);
                 MelonLogger.Msg("Final Count: " + finalCount.ToString());
-
                 CrossoverClass.shouldDisplay = true;
             }
         }
     }
 
     [HarmonyPatch(typeof(BoxInteraction), "OnDisable")]
-    public static class BIOnDisbalePatch
+    public static class BIOnDisablePatch
     {
-
-        static void Postfix(BoxInteraction __instance)
-        {
-            CrossoverClass.shouldDisplay = false;
-        }
+        private static void Postfix(BoxInteraction __instance) => CrossoverClass.shouldDisplay = false;
     }
 
-    
-    [HarmonyPatch(typeof(DeliveryManager), "Delivery", new Type[] {typeof(MarketShoppingCart.CartData)})]
+    [HarmonyPatch(typeof(DeliveryManager), "Delivery")]
     public static class DeliveryManagerPatch
     {
-        static void Postfix(DeliveryManager __instance)
+        private static void Postfix(DeliveryManager __instance)
         {
-            if (CrossoverClass.autoRack)
-            {
-                GameObject deliveryManager = __instance.gameObject;
-                CrossoverClass.AutoRack(__instance);
-            }
+            if (!CrossoverClass.autoRack)
+                return;
+            GameObject gameObject = __instance.gameObject;
+            CrossoverClass.AutoRack(__instance);
+            //CrossoverClass.CustomWarning("Called Delivery hook!");
         }
     }
-
-
 }
 
 
