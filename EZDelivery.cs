@@ -13,27 +13,40 @@ using System.Reflection;
 
 namespace EZDelivery
 {
-
+    /// <summary>
+    /// EZDelivery mod for Supermarket Simulator
+    /// Version: 1.5.6
+    /// Created by WaffDev
+    /// </summary>
     public class EZDelivery : MelonMod
     {
-        private KeyCode keyBind;
+        /* Preferences */
 
-        // Preferences
-        private MelonPreferences_Category _preferencesCategory;
+        // The keybind used to rack a box in your hand
+        private KeyCode rackKeybind;
+        // The MelonPreferences instance
+        private MelonPreferences_Category melonPrefCategory;
 
-        private string _keyBindEntry;
+        /* UI Values */
 
+        // Should the UI be displayed?
+        private bool displayUI = false;
+        // The count of how many products are in storage of the current item
+        private int uiDisplayCount = 0;
+        // The physical GameObject of the UI
+        private GameObject uiDisplayGameObject;
+        // The icon used in the UI display
+        private Sprite uiProductIcon;
+        // Is the product in the UI currently being restocked?
+        private bool uiIsRestocking = false;
 
-        // UI Values
-        private bool ui__displayUI = false;
-        private int ui__displayCount = 0;
-        private GameObject ui__display;
-        private Sprite ui__productIcon;
-        private bool ui__restocking = false;
-
+        /// <summary>
+        /// Called when the mod is initialised
+        /// All set up and configuration is handled here
+        /// </summary>
         public override void OnInitializeMelon()
         {
-
+            // Set up harmony and patch methods
             var harmony = new HarmonyLib.Harmony("EZDelivery");
             harmony.PatchAll(typeof(EZDelivery));
 
@@ -42,91 +55,84 @@ namespace EZDelivery
                 Debug.Log("Patched method: " + method.Name);
             });
 
-            // Create Preference Category
-            _preferencesCategory = MelonPreferences.CreateCategory("EZDelivery");
-            MelonPreferences_Entry _keyBindEntryPref;
-            _keyBindEntryPref = _preferencesCategory.CreateEntry<string>("KeyBind", "L");
-            MelonPreferences_Entry _rackFreeSlotsPref;
-            _rackFreeSlotsPref = _preferencesCategory.CreateEntry<bool>("RackFreeSlots", false);
-            MelonPreferences_Entry _autoRackPref;
-            _autoRackPref = _preferencesCategory.CreateEntry<bool>("AutoRack", false);
-            MelonPreferences_Entry _uiEnabledPref;
-            _uiEnabledPref = _preferencesCategory.CreateEntry<bool>("EnableUI", true);
-            
+            // Create preferences entries
+            melonPrefCategory = MelonPreferences.CreateCategory("EZDelivery");
+            MelonPreferences_Entry prefKeybindEntry = melonPrefCategory.CreateEntry<string>("KeyBind", "L");
+            MelonPreferences_Entry prefRackFreeSlots = melonPrefCategory.CreateEntry<bool>("RackFreeSlots", false);
+            MelonPreferences_Entry prefAutoRack = melonPrefCategory.CreateEntry<bool>("AutoRack", false);
+            MelonPreferences_Entry prefIsUIEnabled = melonPrefCategory.CreateEntry<bool>("EnableUI", true);
 
-            // Get value retrieved from config
-            _keyBindEntry = MelonPreferences.GetEntry("EZDelivery", "KeyBind").GetValueAsString();
-            
-
-            bool parsed = bool.TryParse(MelonPreferences.GetEntry("EZDelivery", "AutoRack").BoxedValue.ToString(), out CrossoverClass.autoRack);
-
-            if (!parsed)
+            /* Retrieve and Assign Values */
+            // Key bind
+            string keyBindEntry = MelonPreferences.GetEntry("EZDelivery", "KeyBind").GetValueAsString();
+            rackKeybind = KeyCode.None;
+            bool parsed = KeyCode.TryParse(prefKeybindEntry.GetValueAsString(), out rackKeybind);
+            if (!parsed) // Throw error and fall back to default if invalid
             {
+                MelonLogger.Error(string.Format("There was a problem parsing the KeyBind from the config, {0} is an invalid keybind. Falling back to L", prefKeybindEntry.GetValueAsString()));
+                rackKeybind = KeyCode.L;
+            }
+            // Auto Rack
+            parsed = bool.TryParse(MelonPreferences.GetEntry("EZDelivery", "AutoRack").BoxedValue.ToString(), out CrossoverClass.autoRack);
+            if (!parsed) 
+            { 
                 MelonLogger.Error("There was a problem parsing the AutoRack field from the config, it is an invalid boolean value. Falling back to false");
                 CrossoverClass.autoRack = false;
             }
-
+            // Rack Free Slots
             parsed = bool.TryParse(MelonPreferences.GetEntry("EZDelivery", "RackFreeSlots").BoxedValue.ToString(), out CrossoverClass.rackFreeSlots);
-
             if (!parsed)
             {
                 MelonLogger.Error("There was a problem parsing the RackFreeSlots field from the config, it is an invalid boolean value. Falling back to false");
                 CrossoverClass.rackFreeSlots = false;
             }
-
+            // UI Enabled
             parsed = bool.TryParse(MelonPreferences.GetEntry("EZDelivery", "EnableUI").BoxedValue.ToString(), out CrossoverClass.uiEnabled);
-
             if (!parsed)
             {
                 MelonLogger.Error("There was a problem parsing the EnableUI field from the config, it is an invalid boolean value. Falling back to false");
                 CrossoverClass.uiEnabled = false;
             }
 
-            keyBind = KeyCode.None;
-            parsed = KeyCode.TryParse(_keyBindEntry, out keyBind);
-            if (!parsed)
-            {
-                MelonLogger.Error(String.Format("There was a problem parsing the KeyBind from the config, {0} is an invalid keybind. Falling back to L", _keyBindEntry));
-                keyBind = KeyCode.L;
-            }
-
             MelonPreferences.Save();
 
         }
 
+        /// <summary>
+        /// Overrides the scene initialize event to load the UI
+        /// </summary>
         public override void OnSceneWasInitialized(int buildIndex, string sceneName)
         {
             base.OnSceneWasInitialized(buildIndex, sceneName);
-            if (sceneName == "Main Scene")
+            if (sceneName == "Main Scene") // Check we are in the right scene and not on the menu
             {
                 if (CrossoverClass.uiEnabled)
                     CreateUI();
-
             }
 
         }
 
 
-
+        /// <summary>
+        /// Overrides the update event for game logic
+        /// Listens for key binds and updates the UI
+        /// </summary>
         public override void OnUpdate()
         {
             // Update UI values
-            ui__displayUI = CrossoverClass.shouldDisplay;
-            ui__displayCount = CrossoverClass.count;
-            ui__productIcon = CrossoverClass.productIcon;
-            ui__restocking = CrossoverClass.restocking;
-
-            if (Input.GetKeyDown(keyBind))
+            displayUI = CrossoverClass.shouldDisplay;
+            uiDisplayCount = CrossoverClass.count;
+            uiProductIcon = CrossoverClass.productIcon;
+            uiIsRestocking = CrossoverClass.restocking;
+            
+            if (Input.GetKeyDown(rackKeybind)) // If the rack keybind has been pressed
             {
                 GameObject player = GameObject.Find("Player");
-
-                if (player != null)
+                if (player != null) // Ensure the player is loaded
                 {
                     BoxInteraction bi = player.GetComponent<BoxInteraction>();
-
-                    if (bi != null)
+                    if (bi != null) // Check the player is holding a box
                     {
-
                         if (bi.Interactable is Box && bi.enabled) // BoxInteraction MUST be enabled, else magic invisible boxes fill the racks
                         {
                             PlaceBoxInRack(player, bi);
@@ -135,22 +141,23 @@ namespace EZDelivery
                 }
             }
 
-            if (Input.GetKeyDown(KeyCode.Tab)) // force auto rack
-            {
-                CrossoverClass.AutoRack(Singleton<DeliveryManager>.Instance);
-            }
-
-            // Do UI
+            // Draw the UI
             if (CrossoverClass.uiEnabled)
             {
-                if (ui__display != null)
+                if (uiDisplayGameObject != null)
                 {
-                    ui__display.SetActive(ui__displayUI);
+                    // Enable UI game object and render
+                    uiDisplayGameObject.SetActive(displayUI);
+
                     RenderUI();
                 }
             }
         }
 
+        /// <summary>
+        /// Creates the UI based on reusable game objects
+        /// **very unstable and easily breakable way to do it, i'll rewrite this at some point**
+        /// </summary>
         private void CreateUI()
         {
             // dupe from the expenses hint UI
@@ -162,7 +169,7 @@ namespace EZDelivery
 
             GameObject window = canvas.transform.Find("Price Change Notification Window").gameObject;
             window.name = "Notification Window";
-            ui__display = window;
+            uiDisplayGameObject = window;
 
             // Title Section
 
@@ -212,7 +219,7 @@ namespace EZDelivery
             GameObject pirContent = productsInRack.transform.Find("Product Name").gameObject;
             pirContent.name = "PIR-Content";
             TextMeshProUGUI pirTmPro = pirContent.GetComponent<TextMeshProUGUI>();
-            pirTmPro.text = "Products in rack: " + ui__displayCount.ToString();
+            pirTmPro.text = "Products in rack: " + uiDisplayCount.ToString();
 
 
             // Restocking
@@ -231,9 +238,13 @@ namespace EZDelivery
             window.SetActive(false);
         }
 
+        /// <summary>
+        /// Renders the UI
+        /// Meant to be called on update
+        /// </summary>
         private void RenderUI()
         {
-            GameObject window = ui__display;
+            GameObject window = uiDisplayGameObject;
             if (window != null)
             {
                 GameObject title = window.transform.Find("Title").gameObject;
@@ -247,6 +258,7 @@ namespace EZDelivery
                         image.sprite = CrossoverClass.productIcon;
                     }
 
+                    // Set the correct text for the UI 
                     TextMeshProUGUI titleTmPro = title.transform.Find("Title Text").gameObject.GetComponent<TextMeshProUGUI>();
                     titleTmPro.text = "Rack Information";
                     titleTmPro.fontSize = 18;
@@ -265,15 +277,24 @@ namespace EZDelivery
             }
         }
 
-
+        /*
+         * Fix provided by rj1244 on GitHub for EZD Patch 1.5.6
+         * in pull request #3
+         */
+        /// <summary>
+        /// Places a box in the storage
+        /// </summary>
+        /// <param name="player">The instance of the player GameObject</param>
+        /// <param name="boxInteraction">The box to place</param>
         private void PlaceBoxInRack(GameObject player, BoxInteraction boxInteraction)
         {
-            Box interactable = (Box)boxInteraction.Interactable;
-            RackManager instance = Singleton<RackManager>.Instance;
-            if (instance == null)
+            // Retrieve the interactable from the BI and cast it to a box
+            Box box = (Box)boxInteraction.Interactable;
+            RackManager rackManagerInstance = Singleton<RackManager>.Instance;
+            if (rackManagerInstance == null) // Check if instance exists
                 return;
-            ProductSO product = interactable.Product;
-            if (Singleton<EmployeeManager>.Instance.IsProductOccupied(product.ID))
+            ProductSO product = box.Product;
+            if (Singleton<EmployeeManager>.Instance.IsProductOccupied(product.ID)) // Check if the box is occupied by a restocker. If so it'll break the restocker
             {
                 CrossoverClass.CustomWarning("Occupied by Restocker");
             }
@@ -283,14 +304,19 @@ namespace EZDelivery
                 RestockerManagementData data = new RestockerManagementData();
                 data.UseUnlabeledRacks = CrossoverClass.rackFreeSlots;
                 restocker.SetRestockerManagementData(data);
-                RackSlot slotThatHasSpaceFor = instance.GetRackSlotThatHasSpaceFor(product.ID, interactable.BoxID, restocker);
-                if (slotThatHasSpaceFor == null || !slotThatHasSpaceFor.HasProduct && !CrossoverClass.rackFreeSlots)
+                // Get the rack slot based on the rack manager
+                RackSlot slotThatHasSpaceFor = rackManagerInstance.GetRackSlotThatHasSpaceFor(product.ID, box.BoxID, restocker);
+                Debug.Log("Has Product? " + slotThatHasSpaceFor.HasProduct);
+                Debug.Log("Rack Free Slots? " + CrossoverClass.rackFreeSlots);
+                if (slotThatHasSpaceFor == null || !slotThatHasSpaceFor.HasLabel && !CrossoverClass.rackFreeSlots) // Check if there is no rack space
+                {
                     CrossoverClass.CustomWarning("No rack space");
+                }
                 else if (slotThatHasSpaceFor.Data.ProductID == product.ID || CrossoverClass.rackFreeSlots)
                 {
-                    interactable.CloseBox();
-                    slotThatHasSpaceFor.AddBox(interactable.BoxID, interactable);
-                    interactable.Racked = true;
+                    box.CloseBox();
+                    slotThatHasSpaceFor.AddBox(box.BoxID, box);
+                    box.Racked = true;
                     Traverse.Create((object)boxInteraction).Field("m_Box").SetValue((object)null);
                     Singleton<PlayerObjectHolder>.Instance.PlaceBoxToRack();
                     Singleton<PlayerInteraction>.Instance.InteractionEnd((Interaction)boxInteraction);
@@ -319,36 +345,30 @@ namespace EZDelivery
             GameObject.Find("Warning Canvas").transform.Find("Interaction Warning").transform.Find("BG").transform.Find("Title").gameObject.GetComponent<TextMeshProUGUI>().text = "<sprite=0> " + text;
         }
 
-        public static void AutoRack(DeliveryManager deliveryManager)
+        public static void AutoRack()
         {
-            int num = 0;
             List<Box> boxList = new List<Box>();
-            for (int index = 0; index < deliveryManager.transform.childCount; ++index)
+            StorageStreet storageStreetManager = Singleton<StorageStreet>.Instance;
+            storageStreetManager.GetAllBoxesFromStreet().ToList().ForEach((box) =>
             {
-                ++num;
-                GameObject gameObject = deliveryManager.transform.GetChild(index).gameObject;
-                Box component1 = (Box)null;
-                if (gameObject.TryGetComponent<Box>(out component1))
+                if (box.ProductCount > 0)
                 {
-                    boxList.Add(component1);
+                    storageStreetManager.boxes.Remove(box);
+                    boxList.Add(box);
                 }
-                else
-                {
-                    FurnitureBox component2 = (FurnitureBox)null;
-                    if (gameObject.TryGetComponent<FurnitureBox>(out component2))
-                        Debug.Log((object)"Skipped auto-racking a box, the box is furniture");
-                }
-            }
-            boxList.ForEach((Action<Box>)(box =>
+            });
+           
+            boxList.ForEach(box =>
             {
                 Restocker restocker = new Restocker();
                 RestockerManagementData data = new RestockerManagementData();
                 data.UseUnlabeledRacks = CrossoverClass.rackFreeSlots;
                 restocker.SetRestockerManagementData(data);
                 RackSlot slotThatHasSpaceFor = Singleton<RackManager>.Instance.GetRackSlotThatHasSpaceFor(box.Product.ID, box.BoxID, restocker);
-                if (!(slotThatHasSpaceFor != null))
+                if (slotThatHasSpaceFor == null)
                     return;
-                if (box.Product.ID == slotThatHasSpaceFor.Data.ProductID || CrossoverClass.rackFreeSlots)
+                if (slotThatHasSpaceFor.HasLabel && !CrossoverClass.rackFreeSlots || 
+                    !slotThatHasSpaceFor.HasLabel && CrossoverClass.rackFreeSlots)
                 {
                     foreach (Collider componentsInChild in box.gameObject.GetComponentsInChildren<Collider>())
                         componentsInChild.isTrigger = false;
@@ -367,7 +387,7 @@ namespace EZDelivery
                 }
                 else if (!CrossoverClass.rackFreeSlots)
                     CrossoverClass.CustomWarning("Some products had no space");
-            }));
+            });
         }
     }
 
@@ -412,7 +432,10 @@ namespace EZDelivery
     [HarmonyPatch(typeof(BoxInteraction), "OnDisable")]
     public static class BIOnDisablePatch
     {
-        private static void Postfix(BoxInteraction __instance) => CrossoverClass.shouldDisplay = false;
+        private static void Postfix(BoxInteraction __instance)
+        {
+            CrossoverClass.shouldDisplay = false;
+        }
     }
 
     [HarmonyPatch(typeof(DeliveryManager), "Delivery")]
@@ -423,8 +446,8 @@ namespace EZDelivery
             if (!CrossoverClass.autoRack)
                 return;
             GameObject gameObject = __instance.gameObject;
-            CrossoverClass.AutoRack(__instance);
-            //CrossoverClass.CustomWarning("Called Delivery hook!");
+            CrossoverClass.AutoRack();
+            CrossoverClass.CustomWarning("Called Delivery hook!");
         }
     }
 }
